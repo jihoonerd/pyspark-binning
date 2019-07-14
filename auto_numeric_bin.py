@@ -1,41 +1,18 @@
-import pyspark.sql.functions as F
-from pyspark.ml.feature import Bucketizer
+import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import sys
 
 
-def spark_auto_numeric_bin(df, column_name, cutoff=0.05, init_num_bin=10):
+def spark_auto_numeric_bin(df, column_name, method="auto"):
+    """
+    :param df: dataframe
+    :param column_name:  columns name to draw
+    :param method: 'auto', 'sturges', 'fd', 'doane', 'scott', 'rice' or 'sqrt'
+    :return: None
+    """
 
-    column_bin = column_name + "_BIN"
-    df_num_row = df.count()
-    df_bin_column = df.select(column_name).dropna()
-    df_bin_column_num_row = df_bin_column.count()
-    print("{} rows with NULL are dropped.".format(df_num_row - df_bin_column_num_row))
-
-    col_max = df.agg(F.max(df[column_name])).head()[0]
-    col_min = df.agg(F.min(df[column_name])).head()[0]
-
-    cutoff_bincount = cutoff * df_bin_column_num_row
-
-    for num_bin in range(init_num_bin, 1, -1):
-        print("Try to make {} bins...".format(num_bin))
-        step = (col_max - col_min) / num_bin
-        splits = [-float("inf")] + [col_min + i * step for i in range(1, num_bin)] + [float("inf")]
-        bucketizer = Bucketizer(splits=splits, inputCol=column_name, outputCol=column_bin)
-        bucketedData = bucketizer.transform(df)
-        bucketed_value_count = bucketedData.groupBy(column_bin).count().orderBy(column_bin)
-        print("Min / Max: ", [col_min, col_max])
-        print("Splits: ", splits)
-        if bucketed_value_count.agg(F.min(bucketed_value_count["count"])).head()[0] > cutoff_bincount:
-            print("Success.")
-            break
-        else:
-            print("Failed with {} bins".format(num_bin))
-            continue
-
-    print("Bucketizer output with %d buckets" % (len(bucketizer.getSplits())-1))
-
-    pd_df = bucketed_value_count.toPandas()
-    sns.barplot(pd_df[column_bin], pd_df["count"])
+    pd_df = df.select(column_name).toPandas()
+    plt.hist(pd_df[column_name], bins=method)
     plt.grid()
-    plt.show()
+    # plt.show()
+    plt.show(sys.stdout, format='svg')
